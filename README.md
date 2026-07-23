@@ -1,4 +1,4 @@
-# Jain & Jain Mandi ERP
+# AgroLedger
 
 A comprehensive, enterprise-grade ERP system built for Indian Agricultural Commission Agents (Adhatiya) operating within regulated Anaj Mandis. This system digitizes the entire agricultural supply chain workflow from farmer crop arrival to final buyer settlement and tax reporting.
 
