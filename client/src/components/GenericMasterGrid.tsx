@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Box, Typography, Button, Paper, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, CircularProgress,
-  Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem
+  Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, IconButton, Tooltip
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
@@ -19,20 +20,49 @@ export interface ColumnDef {
 export const GenericMasterGrid = ({ title, columns, hooks, schema }: { title: string, columns: ColumnDef[], hooks: any, schema: any }) => {
   const { data, isLoading } = hooks.useGetAll();
   const createMutation = hooks.useCreate();
+  const updateMutation = hooks.useUpdate();
   const deleteMutation = hooks.useDelete();
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  const { control, handleSubmit, reset, formState: { errors } } = useForm({
+  const { control, handleSubmit, reset, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
   });
 
-  const onSubmit = (formData: any) => {
-    createMutation.mutate(formData, {
-      onSuccess: () => {
-        setOpen(false);
-        reset();
+  const handleOpenNew = () => {
+    reset();
+    setEditingId(null);
+    setOpen(true);
+  };
+
+  const handleEdit = (record: any) => {
+    reset();
+    setEditingId(record._id);
+    Object.keys(record).forEach((key) => {
+      if (key !== '_id') {
+        setValue(key, record[key]?.toString() || '');
       }
     });
+    setOpen(true);
+  };
+
+  const onSubmit = (formData: any) => {
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, payload: formData }, {
+        onSuccess: () => {
+          setOpen(false);
+          setEditingId(null);
+          reset();
+        }
+      });
+    } else {
+      createMutation.mutate(formData, {
+        onSuccess: () => {
+          setOpen(false);
+          reset();
+        }
+      });
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -41,17 +71,19 @@ export const GenericMasterGrid = ({ title, columns, hooks, schema }: { title: st
     }
   };
 
+  const isPending = createMutation.isPending || updateMutation.isPending;
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">{title}</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => { reset(); setOpen(true); }}>
+        <Typography variant="h4" sx={{ fontFamily: 'Outfit', fontWeight: 700 }}>{title}s</Typography>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenNew} sx={{ borderRadius: 2 }}>
           Add {title}
         </Button>
       </Box>
 
-      <Paper sx={{ width: '100%', overflow: 'hidden' }}>
-        <TableContainer sx={{ maxHeight: 600 }}>
+      <Paper sx={{ width: '100%', overflow: 'hidden', borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+        <TableContainer sx={{ maxHeight: 'calc(100vh - 250px)' }}>
           <Table stickyHeader>
             <TableHead>
               <TableRow>
@@ -62,11 +94,11 @@ export const GenericMasterGrid = ({ title, columns, hooks, schema }: { title: st
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={columns.length + 1} align="center" sx={{ py: 3 }}><CircularProgress /></TableCell>
+                  <TableCell colSpan={columns.length + 1} align="center" sx={{ py: 5 }}><CircularProgress /></TableCell>
                 </TableRow>
               ) : data?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={columns.length + 1} align="center" sx={{ py: 3 }}>No records found.</TableCell>
+                  <TableCell colSpan={columns.length + 1} align="center" sx={{ py: 5, color: 'text.secondary' }}>No records found.</TableCell>
                 </TableRow>
               ) : (
                 data?.map((row: any) => (
@@ -75,9 +107,16 @@ export const GenericMasterGrid = ({ title, columns, hooks, schema }: { title: st
                       <TableCell key={col.key}>{row[col.key]?.toString()}</TableCell>
                     ))}
                     <TableCell align="right">
-                      <Button color="error" size="small" onClick={() => handleDelete(row._id)}>
-                        <DeleteIcon />
-                      </Button>
+                      <Tooltip title="Edit">
+                        <IconButton color="primary" size="small" onClick={() => handleEdit(row)}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete">
+                        <IconButton color="error" size="small" onClick={() => handleDelete(row._id)}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))
@@ -88,9 +127,9 @@ export const GenericMasterGrid = ({ title, columns, hooks, schema }: { title: st
       </Paper>
 
       {/* Dynamic Form Dialog */}
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3, p: 1 } }}>
         <form onSubmit={handleSubmit(onSubmit)}>
-          <DialogTitle>Add New {title}</DialogTitle>
+          <DialogTitle sx={{ fontWeight: 700 }}>{editingId ? `Edit ${title}` : `Add New ${title}`}</DialogTitle>
           <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
             {columns.filter(c => !c.hideInForm).map(col => (
               <Controller
@@ -148,10 +187,10 @@ export const GenericMasterGrid = ({ title, columns, hooks, schema }: { title: st
               />
             ))}
           </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" variant="contained" disabled={createMutation.isPending}>
-              {createMutation.isPending ? 'Saving...' : 'Save'}
+          <DialogActions sx={{ p: 2, pt: 0 }}>
+            <Button onClick={() => setOpen(false)} color="inherit">Cancel</Button>
+            <Button type="submit" variant="contained" disabled={isPending}>
+              {isPending ? 'Saving...' : 'Save'}
             </Button>
           </DialogActions>
         </form>
