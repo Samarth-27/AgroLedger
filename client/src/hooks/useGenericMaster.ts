@@ -1,14 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '../api/axios';
-import { IApiResponse } from '@mandi-erp/shared';
+import { db } from '../db/db';
+import { v4 as uuidv4 } from 'uuid';
 
-export const createMasterHooks = <T>(endpoint: string, queryKey: string) => {
+export const createMasterHooks = <T extends { _id?: string }>(tableName: string, queryKey: string) => {
   const useGetAll = () => {
     return useQuery({
       queryKey: [queryKey],
       queryFn: async () => {
-        const { data } = await apiClient.get<IApiResponse<T[]>>(endpoint);
-        return data.data;
+        return await (db as any)[tableName].toArray();
       }
     });
   };
@@ -17,8 +16,9 @@ export const createMasterHooks = <T>(endpoint: string, queryKey: string) => {
     const queryClient = useQueryClient();
     return useMutation({
       mutationFn: async (payload: T) => {
-        const { data } = await apiClient.post<IApiResponse<T>>(endpoint, payload);
-        return data.data;
+        const newRecord = { ...payload, _id: uuidv4() };
+        await (db as any)[tableName].add(newRecord);
+        return newRecord;
       },
       onSuccess: () => queryClient.invalidateQueries({ queryKey: [queryKey] })
     });
@@ -28,8 +28,9 @@ export const createMasterHooks = <T>(endpoint: string, queryKey: string) => {
     const queryClient = useQueryClient();
     return useMutation({
       mutationFn: async ({ id, payload }: { id: string; payload: Partial<T> }) => {
-        const { data } = await apiClient.put<IApiResponse<T>>(`${endpoint}/${id}`, payload);
-        return data.data;
+        await (db as any)[tableName].update(id, payload);
+        const updated = await (db as any)[tableName].get(id);
+        return updated;
       },
       onSuccess: () => queryClient.invalidateQueries({ queryKey: [queryKey] })
     });
@@ -39,8 +40,8 @@ export const createMasterHooks = <T>(endpoint: string, queryKey: string) => {
     const queryClient = useQueryClient();
     return useMutation({
       mutationFn: async (id: string) => {
-        const { data } = await apiClient.delete<IApiResponse<null>>(`${endpoint}/${id}`);
-        return data.data;
+        await (db as any)[tableName].delete(id);
+        return null;
       },
       onSuccess: () => queryClient.invalidateQueries({ queryKey: [queryKey] })
     });

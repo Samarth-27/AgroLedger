@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { ILoginRequest } from '@mandi-erp/shared';
-import { apiClient } from '../api/axios';
 
 interface User {
   id: string;
@@ -33,8 +32,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = async (data: ILoginRequest) => {
-    const response = await apiClient.post('/auth/login', data);
-    const { token: newToken, user: newUser } = response.data.data;
+    // Local offline mock login
+    const newToken = 'local-offline-token';
+    const newUser = { id: 'local-1', email: data.email, role: 'admin' };
     
     setToken(newToken);
     setUser(newUser);

@@ -1,19 +1,18 @@
-import { LedgerTransaction } from '../models/LedgerTransaction';
-import { AccountHead } from '../models/AccountHead';
-import { AppError } from '../utils/AppError';
+import { db } from '../db/db';
+import { v4 as uuidv4 } from 'uuid';
 
 export class LedgerService {
   
-  // Ensures default accounts exist
   async getOrCreateAccount(name: string, type: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE') {
-    let account = await AccountHead.findOne({ name });
+    let account = await db.accountHeads.where('name').equals(name).first();
     if (!account) {
-      account = await AccountHead.create({ name, type });
+      account = { _id: uuidv4(), name, type };
+      await db.accountHeads.add(account);
     }
     return account;
   }
 
-  async postJForm(jForm: any, session?: any) {
+  async postJForm(jForm: any) {
     const purchaseAcc = await this.getOrCreateAccount('Purchases', 'EXPENSE');
     const commissionAcc = await this.getOrCreateAccount('Commission Payable', 'LIABILITY');
     const mandiTaxAcc = await this.getOrCreateAccount('Mandi Tax Payable', 'LIABILITY');
@@ -43,7 +42,6 @@ export class LedgerService {
       lines.push({ accountId: labourAcc._id, accountName: labourAcc.name, debit: 0, credit: jForm.labourExpense });
     }
     
-    // Net Payable to Farmer
     lines.push({
       accountId: farmerAcc._id,
       accountName: farmerAcc.name,
@@ -53,17 +51,19 @@ export class LedgerService {
       credit: jForm.netAmount
     });
 
-    await LedgerTransaction.create([{
+    await db.ledger.add({
+      _id: uuidv4(),
       date: jForm.date,
       voucherType: 'J-FORM',
       voucherNumber: jForm.jFormNumber,
       referenceId: jForm._id,
       narration: `J-Form generated for ${jForm.netAmount}`,
-      lines
-    }], { session });
+      lines,
+      isDeleted: false
+    } as any);
   }
 
-  async postBuyerInvoice(invoice: any, session?: any) {
+  async postBuyerInvoice(invoice: any) {
     const salesAcc = await this.getOrCreateAccount('Sales', 'REVENUE');
     const commissionAcc = await this.getOrCreateAccount('Commission Income', 'REVENUE');
     const mandiTaxAcc = await this.getOrCreateAccount('Mandi Tax Payable', 'LIABILITY');
@@ -105,17 +105,19 @@ export class LedgerService {
       lines.push({ accountId: igstAcc._id, accountName: igstAcc.name, debit: 0, credit: invoice.igstAmount });
     }
 
-    await LedgerTransaction.create([{
+    await db.ledger.add({
+      _id: uuidv4(),
       date: invoice.date,
       voucherType: 'INVOICE',
       voucherNumber: invoice.invoiceNumber,
       referenceId: invoice._id,
       narration: `Invoice generated for ${invoice.netAmount}`,
-      lines
-    }], { session });
+      lines,
+      isDeleted: false
+    } as any);
   }
 
-  async postPaymentReceipt(payment: any, session?: any) {
+  async postPaymentReceipt(payment: any) {
     const cashAcc = await this.getOrCreateAccount('Cash', 'ASSET');
     const bankAcc = await this.getOrCreateAccount('Bank Accounts', 'ASSET');
     const farmerAcc = await this.getOrCreateAccount('Sundry Creditors - Farmers', 'LIABILITY');
@@ -127,7 +129,6 @@ export class LedgerService {
     const lines: any[] = [];
 
     if (payment.type === 'PAYMENT') {
-      // Dr. Party, Cr. Cash/Bank
       lines.push({
         accountId: partyAcc._id,
         accountName: partyAcc.name,
@@ -143,7 +144,6 @@ export class LedgerService {
         credit: payment.amount
       });
     } else {
-      // Dr. Cash/Bank, Cr. Party
       lines.push({
         accountId: modeAcc._id,
         accountName: modeAcc.name,
@@ -160,55 +160,57 @@ export class LedgerService {
       });
     }
 
-    await LedgerTransaction.create([{
+    await db.ledger.add({
+      _id: uuidv4(),
       date: payment.date,
       voucherType: payment.type,
       voucherNumber: payment.voucherNumber,
       referenceId: payment._id,
       narration: payment.reference || `Voucher ${payment.voucherNumber}`,
-      lines
-    }], { session });
+      lines,
+      isDeleted: false
+    } as any);
   }
 
   async getTrialBalance() {
-    const result = await LedgerTransaction.aggregate([
-      { $unwind: '$lines' },
-      {
-        $group: {
-          _id: { accountId: '$lines.accountId', accountName: '$lines.accountName' },
-          totalDebit: { $sum: '$lines.debit' },
-          totalCredit: { $sum: '$lines.credit' }
+    const transactions = await db.ledger.toArray();
+    const balances: Record<string, any> = {};
+
+    for (const txn of transactions) {
+      for (const line of txn.lines) {
+        if (!balances[line.accountId]) {
+          balances[line.accountId] = {
+            accountId: line.accountId,
+            accountName: line.accountName,
+            totalDebit: 0,
+            totalCredit: 0
+          };
         }
-      },
-      {
-        $project: {
-          _id: 0,
-          accountId: '$_id.accountId',
-          accountName: '$_id.accountName',
-          totalDebit: 1,
-          totalCredit: 1,
-          balance: { $subtract: ['$totalDebit', '$totalCredit'] }
-        }
-      },
-      { $sort: { accountName: 1 } }
-    ]);
-    
-    // Normalize Decimal128 back to numbers
-    return result.map(r => ({
-      ...r,
-      totalDebit: Number(r.totalDebit?.toString() || 0),
-      totalCredit: Number(r.totalCredit?.toString() || 0),
-      balance: Number(r.balance?.toString() || 0)
-    }));
+        balances[line.accountId].totalDebit += line.debit;
+        balances[line.accountId].totalCredit += line.credit;
+      }
+    }
+
+    return Object.values(balances).map(b => ({
+      ...b,
+      balance: b.totalDebit - b.totalCredit
+    })).sort((a, b) => a.accountName.localeCompare(b.accountName));
   }
 
   async getAccountLedger(accountId?: string, partyId?: string) {
-    const match: any = {};
-    if (accountId) match['lines.accountId'] = accountId;
-    if (partyId) match['lines.partyId'] = partyId;
+    const transactions = await db.ledger.toArray();
+    
+    // Filter transactions that have at least one line matching criteria
+    const filtered = transactions.filter(txn => {
+      return txn.lines.some(line => {
+        let match = true;
+        if (accountId && line.accountId !== accountId) match = false;
+        if (partyId && line.partyId !== partyId) match = false;
+        return match;
+      });
+    });
 
-    const txns = await LedgerTransaction.find(match).sort({ date: 1 }).populate('lines.accountId').lean();
-    return txns;
+    return filtered.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }
 }
 

@@ -4,12 +4,11 @@
   "private": true,
   "workspaces": [
     "client",
-    "server",
     "shared"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
-    "build": "npm run build -w shared && npm run build -w server && npm run build -w client",
+    "dev": "npm run dev -w client",
+    "build": "npm run build -w shared && npm run build -w client",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "prepare": "husky install"

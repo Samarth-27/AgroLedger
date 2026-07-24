@@ -1,14 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '../api/axios';
-import { IFarmer, IBuyer, ICommodity, IGodown, IApiResponse } from '@mandi-erp/shared';
+import { db } from '../db/db';
+import { IFarmer, IBuyer, ICommodity, IGodown } from '@mandi-erp/shared';
+import { v4 as uuidv4 } from 'uuid';
+
+const generateCode = (prefix: string, count: number) => `${prefix}-${(count + 1).toString().padStart(4, '0')}`;
 
 // -- Farmers --
 export const useFarmers = () => {
   return useQuery({
     queryKey: ['farmers'],
     queryFn: async () => {
-      const { data } = await apiClient.get<IApiResponse<IFarmer[]>>('/masters/farmers');
-      return data.data;
+      return await db.farmers.toArray();
     }
   });
 };
@@ -17,8 +19,14 @@ export const useCreateFarmer = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (farmer: IFarmer) => {
-      const { data } = await apiClient.post<IApiResponse<IFarmer>>('/masters/farmers', farmer);
-      return data.data;
+      const count = await db.farmers.count();
+      const newFarmer = {
+        ...farmer,
+        _id: uuidv4(),
+        code: generateCode('F', count)
+      };
+      await db.farmers.add(newFarmer);
+      return newFarmer;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['farmers'] })
   });
@@ -29,8 +37,7 @@ export const useBuyers = () => {
   return useQuery({
     queryKey: ['buyers'],
     queryFn: async () => {
-      const { data } = await apiClient.get<IApiResponse<IBuyer[]>>('/masters/buyers');
-      return data.data;
+      return await db.buyers.toArray();
     }
   });
 };
@@ -39,8 +46,14 @@ export const useCreateBuyer = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (buyer: IBuyer) => {
-      const { data } = await apiClient.post<IApiResponse<IBuyer>>('/masters/buyers', buyer);
-      return data.data;
+      const count = await db.buyers.count();
+      const newBuyer = {
+        ...buyer,
+        _id: uuidv4(),
+        code: generateCode('B', count)
+      };
+      await db.buyers.add(newBuyer);
+      return newBuyer;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['buyers'] })
   });
@@ -51,8 +64,7 @@ export const useCommodities = () => {
   return useQuery({
     queryKey: ['commodities'],
     queryFn: async () => {
-      const { data } = await apiClient.get<IApiResponse<ICommodity[]>>('/masters/commodities');
-      return data.data;
+      return await db.commodities.toArray();
     }
   });
 };
@@ -61,8 +73,12 @@ export const useCreateCommodity = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (commodity: ICommodity) => {
-      const { data } = await apiClient.post<IApiResponse<ICommodity>>('/masters/commodities', commodity);
-      return data.data;
+      const newCommodity = {
+        ...commodity,
+        _id: uuidv4()
+      };
+      await db.commodities.add(newCommodity);
+      return newCommodity;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['commodities'] })
   });
@@ -73,8 +89,7 @@ export const useGodowns = () => {
   return useQuery({
     queryKey: ['godowns'],
     queryFn: async () => {
-      const { data } = await apiClient.get<IApiResponse<IGodown[]>>('/masters/godowns');
-      return data.data;
+      return await db.godowns.toArray();
     }
   });
 };
@@ -83,8 +98,12 @@ export const useCreateGodown = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (godown: IGodown) => {
-      const { data } = await apiClient.post<IApiResponse<IGodown>>('/masters/godowns', godown);
-      return data.data;
+      const newGodown = {
+        ...godown,
+        _id: uuidv4()
+      };
+      await db.godowns.add(newGodown);
+      return newGodown;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['godowns'] })
   });
