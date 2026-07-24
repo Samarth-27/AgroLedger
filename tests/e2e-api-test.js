@@ -1,4 +1,3 @@
-const fs = require('fs');
 
 async function runTests() {
   const baseUrl = 'http://localhost:5000/api';
