@@ -10,8 +10,7 @@
     "dev": "npm run dev -w client",
     "build": "npm run build -w shared && npm run build -w client",
     "lint": "eslint .",
-    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "prepare": "husky install"
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
