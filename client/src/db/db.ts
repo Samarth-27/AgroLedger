@@ -28,7 +28,7 @@ export class MandiDB extends Dexie {
 
   constructor() {
     super('MandiDB');
-    this.version(1).stores({
+    this.version(2).stores({
       farmers: '_id, name, mobile, code',
       buyers: '_id, name, mobile, gstNumber, panNumber, code',
       commodities: '_id, name, hsnCode',
